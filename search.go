@@ -143,7 +143,7 @@ type BM25Parameters struct {
 type EngineInitOptions struct {
 	// 半角逗号分隔的字典文件，具体用法见
 	// sego.Segmenter.LoadDictionary函数的注释
-	SegmenterDictionaries string
+	Segmenter cut.Segmenter
 
 	// 停用词文件
 	StopTokenFile string
@@ -259,8 +259,6 @@ type ScoredDocument struct {
 	TokenLocations [][]int
 }
 
-// 为了方便排序
-
 type ScoredDocuments []ScoredDocument
 
 func (docs ScoredDocuments) Len() int {
@@ -283,10 +281,6 @@ func (docs ScoredDocuments) Less(i, j int) bool {
 
 // 初始化EngineInitOptions，当用户未设定某个选项的值时用默认值取代
 func (options *EngineInitOptions) Init() {
-	if options.SegmenterDictionaries == "" {
-		log.Fatal("字典文件不能为空")
-	}
-
 	if options.NumSegmenterThreads == 0 {
 		options.NumSegmenterThreads = defaultNumSegmenterThreads
 	}
@@ -334,7 +328,7 @@ func (options *EngineInitOptions) Init() {
 
 const (
 	NumNanosecondsInAMillisecond = 1000000
-	PersistentStorageFilePrefix  = "wukong"
+	PersistentStorageFilePrefix  = "db"
 )
 
 type StopTokens struct {
@@ -929,7 +923,9 @@ func (engine *Engine) Init(options EngineInitOptions) {
 	engine.initialized = true
 
 	// 载入分词器词典
-	engine.segmenter.LoadDictionary(options.SegmenterDictionaries)
+	//engine.segmenter.LoadDictionary(options.SegmenterDictionaries)
+	//将词典载入单独分离出来
+	engine.segmenter = options.Segmenter
 
 	// 初始化停用词
 	engine.stopTokens.Init(options.StopTokenFile)
@@ -1025,7 +1021,7 @@ func (engine *Engine) Init(options EngineInitOptions) {
 			dbPath := engine.initOptions.PersistentStorageFolder + "/" + PersistentStorageFilePrefix + "." + strconv.Itoa(shard)
 			db, err := OpenOrCreateKv(dbPath, &kv.Options{})
 			if db == nil || err != nil {
-				log.Fatal("无法打开数据库", dbPath, ": ", err)
+				log.Fatal("无法打开数据库", dbPath, ": ", err, db)
 			}
 			engine.dbs[shard] = db
 		}
