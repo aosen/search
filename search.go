@@ -1327,9 +1327,18 @@ func (engine *Engine) indexerLookupWorker(shard int) {
 			docs = engine.indexers[shard].Lookup(request.tokens, request.labels, nil)
 		} else {
 			docIds := make(map[uint64]bool)
-			for _, ids := range request.docIds {
-				docIds[ids] = true
+			//通过request.docIds 生成查询字典
+			if len(request.docIds) != 2 {
+				continue
 			}
+			for i := request.docIds[0]; i <= request.docIds[1]; i++ {
+				docIds[i] = true
+			}
+			/*
+				for _, ids := range request.docIds {
+					docIds[ids] = true
+				}
+			*/
 			docs = engine.indexers[shard].Lookup(request.tokens, request.labels, &docIds)
 		}
 
