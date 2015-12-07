@@ -110,3 +110,6 @@ type SearchResponse struct {
 	Timeout bool
 }
 ```
+
+#开发进度
+2015-12-04 增加索引存储方式： mongodb
