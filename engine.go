@@ -10,13 +10,11 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/aosen/cut"
-	"github.com/cznic/kv"
 	"io"
 	"log"
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -100,11 +98,6 @@ func (docs ScoredDocuments) Less(i, j int) bool {
 	return len(docs[i].Scores) > len(docs[j].Scores)
 }
 
-const (
-	NumNanosecondsInAMillisecond = 1000000
-	PersistentStorageFilePrefix  = "db"
-)
-
 type segmenterRequest struct {
 	docId uint64
 	hash  uint32
@@ -182,8 +175,10 @@ type EngineInitOptions struct {
 
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
 	UsePersistentStorage    bool
-	PersistentStorageFolder string
 	PersistentStorageShards int
+
+	//索引存储接口对接
+	SearchPipline SearchPipline
 }
 
 var (
@@ -205,7 +200,10 @@ var (
 		K1: 2.0,
 		B:  0.75,
 	}
-	defaultPersistentStorageShards = 8
+	defaultPersistentStorageShards  = 8
+	defaultPersistentStoragePipline = InitKV(
+		defaultNumIndexerThreadsPerShard,
+	)
 )
 
 // 初始化EngineInitOptions，当用户未设定某个选项的值时用默认值取代
@@ -253,6 +251,11 @@ func (options *EngineInitOptions) Init() {
 	if options.PersistentStorageShards == 0 {
 		options.PersistentStorageShards = defaultPersistentStorageShards
 	}
+
+	if options.SearchPipline == nil {
+		//初始化默认的pipline
+		options.SearchPipline = defaultPersistentStoragePipline
+	}
 }
 
 // 搜索引擎基类
@@ -271,7 +274,8 @@ type Engine struct {
 	rankers    []Ranker
 	segmenter  cut.Segmenter
 	stopTokens StopTokens
-	dbs        []*kv.DB
+	//dbs        []*kv.DB
+	searchpipline SearchPipline
 
 	// 建立索引器使用的通信通道
 	segmenterChannel               chan segmenterRequest
@@ -388,21 +392,8 @@ func (engine *Engine) Init(options EngineInitOptions) {
 
 	// 启动持久化存储工作协程
 	if engine.initOptions.UsePersistentStorage {
-		err := os.MkdirAll(engine.initOptions.PersistentStorageFolder, 0700)
-		if err != nil {
-			log.Fatal("无法创建目录", engine.initOptions.PersistentStorageFolder)
-		}
-
-		// 打开或者创建数据库
-		engine.dbs = make([]*kv.DB, engine.initOptions.PersistentStorageShards)
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
-			dbPath := engine.initOptions.PersistentStorageFolder + "/" + PersistentStorageFilePrefix + "." + strconv.Itoa(shard)
-			db, err := OpenOrCreateKv(dbPath, &kv.Options{})
-			if db == nil || err != nil {
-				log.Fatal("无法打开数据库", dbPath, ": ", err, db)
-			}
-			engine.dbs[shard] = db
-		}
+		engine.searchpipline = options.SearchPipline
+		engine.searchpipline.Init()
 
 		// 从数据库中恢复
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
@@ -422,13 +413,8 @@ func (engine *Engine) Init(options EngineInitOptions) {
 
 		// 关闭并重新打开数据库
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
-			engine.dbs[shard].Close()
-			dbPath := engine.initOptions.PersistentStorageFolder + "/" + PersistentStorageFilePrefix + "." + strconv.Itoa(shard)
-			db, err := OpenOrCreateKv(dbPath, &kv.Options{})
-			if db == nil || err != nil {
-				log.Fatal("无法打开数据库", dbPath, ": ", err)
-			}
-			engine.dbs[shard] = db
+			engine.searchpipline.Close(shard)
+			engine.searchpipline.Conn(shard)
 		}
 
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
@@ -751,7 +737,7 @@ func (engine *Engine) persistentStorageIndexDocumentWorker(shard int) {
 		}
 
 		// 将key-value写入数据库
-		engine.dbs[shard].Set(b[0:length], buf.Bytes())
+		engine.searchpipline.Set(shard, b[0:length], buf.Bytes())
 		atomic.AddUint64(&engine.numDocumentsStored, 1)
 	}
 }
@@ -761,42 +747,19 @@ func (engine *Engine) persistentStorageRemoveDocumentWorker(docId uint64, shard 
 	b := make([]byte, 10)
 	length := binary.PutUvarint(b, docId)
 
+	s := int(shard)
 	// 从数据库删除该key
-	engine.dbs[shard].Delete(b[0:length])
+	engine.searchpipline.Delete(s, b[0:length])
 }
 
 func (engine *Engine) persistentStorageInitWorker(shard int) {
-	iter, err := engine.dbs[shard].SeekFirst()
+	err := engine.searchpipline.Recover(shard, engine.internalIndexDocument)
 	if err == io.EOF {
 		engine.persistentStorageInitChannel <- true
 		return
 	} else if err != nil {
 		engine.persistentStorageInitChannel <- true
 		log.Fatal("无法遍历数据库")
-	}
-
-	for {
-		key, value, err := iter.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			continue
-		}
-
-		// 得到docID
-		docId, _ := binary.Uvarint(key)
-
-		// 得到data
-		buf := bytes.NewReader(value)
-		dec := gob.NewDecoder(buf)
-		var data DocumentIndexData
-		err = dec.Decode(&data)
-		if err != nil {
-			continue
-		}
-
-		// 添加索引
-		engine.internalIndexDocument(docId, data)
 	}
 	engine.persistentStorageInitChannel <- true
 }
@@ -813,8 +776,8 @@ func (engine *Engine) NumDocumentsIndexed() uint64 {
 func (engine *Engine) Close() {
 	engine.FlushIndex()
 	if engine.initOptions.UsePersistentStorage {
-		for _, db := range engine.dbs {
-			db.Close()
+		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+			engine.searchpipline.Close(shard)
 		}
 	}
 }
