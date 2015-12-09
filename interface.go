@@ -56,6 +56,8 @@ type SearchIndexer interface {
 type SearchPipline interface {
 	//初始化存储器, shard为初始化的集合编号
 	Init()
+	//获取存储集合数量
+	GetStorageShards() int
 	//连接数据库
 	Conn(shard int)
 	//关闭数据库连接

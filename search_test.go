@@ -24,7 +24,7 @@ func TestSearch(t *testing.T) {
 				B:  0.75,
 			},
 		},
-		PersistentStorageShards: 4,
+		SearchPipline: InitKV(4),
 	})
 	defer searcher.Close()
 

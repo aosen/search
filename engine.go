@@ -174,8 +174,7 @@ type EngineInitOptions struct {
 	DefaultRankOptions *RankOptions
 
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
-	UsePersistentStorage    bool
-	PersistentStorageShards int
+	UsePersistentStorage bool
 
 	//索引存储接口对接
 	SearchPipline SearchPipline
@@ -200,9 +199,9 @@ var (
 		K1: 2.0,
 		B:  0.75,
 	}
-	defaultPersistentStorageShards  = 8
+	defaultPersistentStorageShards  = 4
 	defaultPersistentStoragePipline = InitKV(
-		defaultNumIndexerThreadsPerShard,
+		defaultPersistentStorageShards,
 	)
 )
 
@@ -246,10 +245,6 @@ func (options *EngineInitOptions) Init() {
 
 	if options.DefaultRankOptions.ScoringCriteria == nil {
 		options.DefaultRankOptions.ScoringCriteria = defaultDefaultRankOptions.ScoringCriteria
-	}
-
-	if options.PersistentStorageShards == 0 {
-		options.PersistentStorageShards = defaultPersistentStorageShards
 	}
 
 	if options.SearchPipline == nil {
@@ -360,15 +355,16 @@ func (engine *Engine) Init(options EngineInitOptions) {
 
 	// 初始化持久化存储通道
 	if engine.initOptions.UsePersistentStorage {
+		storageshards := engine.initOptions.SearchPipline.GetStorageShards()
 		engine.persistentStorageIndexDocumentChannels =
 			make([]chan persistentStorageIndexDocumentRequest,
-				engine.initOptions.PersistentStorageShards)
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+				storageshards)
+		for shard := 0; shard < storageshards; shard++ {
 			engine.persistentStorageIndexDocumentChannels[shard] = make(
 				chan persistentStorageIndexDocumentRequest)
 		}
 		engine.persistentStorageInitChannel = make(
-			chan bool, engine.initOptions.PersistentStorageShards)
+			chan bool, storageshards)
 	}
 
 	// 启动分词器
@@ -395,13 +391,14 @@ func (engine *Engine) Init(options EngineInitOptions) {
 		engine.searchpipline = options.SearchPipline
 		engine.searchpipline.Init()
 
+		storageshards := engine.searchpipline.GetStorageShards()
 		// 从数据库中恢复
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+		for shard := 0; shard < storageshards; shard++ {
 			go engine.persistentStorageInitWorker(shard)
 		}
 
 		// 等待恢复完成
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+		for shard := 0; shard < storageshards; shard++ {
 			<-engine.persistentStorageInitChannel
 		}
 		for {
@@ -412,12 +409,12 @@ func (engine *Engine) Init(options EngineInitOptions) {
 		}
 
 		// 关闭并重新打开数据库
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+		for shard := 0; shard < storageshards; shard++ {
 			engine.searchpipline.Close(shard)
 			engine.searchpipline.Conn(shard)
 		}
 
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+		for shard := 0; shard < storageshards; shard++ {
 			go engine.persistentStorageIndexDocumentWorker(shard)
 		}
 	}
@@ -464,7 +461,7 @@ func (engine *Engine) rankerRemoveScoringFieldsWorker(shard int) {
 func (engine *Engine) IndexDocument(docId uint64, data DocumentIndexData) {
 	engine.internalIndexDocument(docId, data)
 
-	hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.initOptions.PersistentStorageShards)
+	hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 	if engine.initOptions.UsePersistentStorage {
 		engine.persistentStorageIndexDocumentChannels[hash] <- persistentStorageIndexDocumentRequest{docId: docId, data: data}
 	}
@@ -499,7 +496,7 @@ func (engine *Engine) RemoveDocument(docId uint64) {
 
 	if engine.initOptions.UsePersistentStorage {
 		// 从数据库中删除
-		hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.initOptions.PersistentStorageShards)
+		hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 		go engine.persistentStorageRemoveDocumentWorker(docId, hash)
 	}
 }
@@ -776,7 +773,8 @@ func (engine *Engine) NumDocumentsIndexed() uint64 {
 func (engine *Engine) Close() {
 	engine.FlushIndex()
 	if engine.initOptions.UsePersistentStorage {
-		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
+		storageshards := engine.searchpipline.GetStorageShards()
+		for shard := 0; shard < storageshards; shard++ {
 			engine.searchpipline.Close(shard)
 		}
 	}

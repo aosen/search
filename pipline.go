@@ -32,6 +32,11 @@ func InitKV(shard int) *KVPipline {
 	}
 }
 
+func (self *KVPipline) GetStorageShards() int {
+	log.Println(self.shardnum)
+	return self.shardnum
+}
+
 func (self *KVPipline) Init() {
 	err := os.MkdirAll(self.storageFolder, 0700)
 	if err != nil {
@@ -48,7 +53,6 @@ func (self *KVPipline) Init() {
 		}
 		self.dbs[shard] = db
 	}
-	log.Println("创建数据库成功")
 }
 
 //连接数据库
@@ -108,6 +112,8 @@ func (self *KVPipline) Delete(shard int, key []byte) {
 }
 
 type MongoPipine struct {
+	//数据库集合个数
+	shardnum int
 }
 
 func InitMongo() *MongoPipine {
@@ -115,6 +121,10 @@ func InitMongo() *MongoPipine {
 }
 
 func (self *MongoPipine) Init() {
+}
+
+func (self *MongoPipine) GetStorageShards() int {
+	return self.shardnum
 }
 
 func (self *MongoPipine) Recover() {
