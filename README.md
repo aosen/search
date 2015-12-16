@@ -1,7 +1,9 @@
 # search
 Golang实现的搜索引擎
 
-详细用法例见: github.com/aosen/searchserver
+##使用过程中遇到任何问题，请联系QQ: 316052486
+
+详细用法见: github.com/aosen/searchserver
 
 #几个重要结构体
 ##搜索引擎初始化结构体
@@ -41,8 +43,8 @@ type EngineInitOptions struct {
 
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
 	UsePersistentStorage    bool
-	PersistentStorageFolder string
-	PersistentStorageShards int
+    //索引持久化
+    SearchPipline SearchPipline
 }
 ```
 ##建立索引结构体
@@ -112,5 +114,4 @@ type SearchResponse struct {
 ```
 
 #开发进度
-2015-12-04 增加索引存储方式： mongodb
-2015-12-07 接口话
+* 2015-12-04 增加索引存储方式： mongodb ***done***
