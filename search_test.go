@@ -24,7 +24,14 @@ func TestSearch(t *testing.T) {
 				B:  0.75,
 			},
 		},
-		SearchPipline: InitKV(4),
+		/*
+			SearchPipline: InitKV(4),
+		*/
+		SearchPipline: InitMongo(
+			"test",
+			4,
+			"localhost:27017",
+			"searchtest_"),
 	})
 	defer searcher.Close()
 

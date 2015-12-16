@@ -113,3 +113,4 @@ type SearchResponse struct {
 
 #开发进度
 2015-12-04 增加索引存储方式： mongodb
+2015-12-07 接口话
