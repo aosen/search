@@ -14,8 +14,8 @@ Golang实现的搜索引擎
 ```Golang
 type EngineInitOptions struct {
 	// 半角逗号分隔的字典文件，具体用法见
-	// sego.Segmenter.LoadDictionary函数的注释
-	Segmenter cut.Segmenter
+    //分词器接口
+	Segmenter SearchSegmenter
 
 	// 停用词文件
 	StopTokenFile string
@@ -48,6 +48,7 @@ type EngineInitOptions struct {
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
 	UsePersistentStorage    bool
     //索引持久化
+    //pipline接口
     SearchPipline SearchPipline
 }
 ```
