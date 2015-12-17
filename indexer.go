@@ -1,6 +1,6 @@
 package search
 
-//搜索引擎的索引器基类
+//搜索引擎的索引器接口,以及提供的必要结构体和方法
 
 import (
 	"github.com/aosen/search/utils"
@@ -8,6 +8,17 @@ import (
 	"math"
 	"sync"
 )
+
+//索引器接口
+type SearchIndexer interface {
+	// 初始化索引器
+	Init(options IndexerInitOptions)
+	// 向反向索引表中加入一个文档
+	AddDocument(document *DocumentIndex)
+	// 查找包含全部搜索键(AND操作)的文档
+	// 当docIds不为nil时仅从docIds指定的文档中查找
+	Lookup() (docs []IndexedDocument)
+}
 
 // 这些常数定义了反向索引表存储的数据类型
 const (
