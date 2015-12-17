@@ -210,7 +210,7 @@ func (indexer *Indexer) AddDocument(document *DocumentIndex) {
 // 查找包含全部搜索键(AND操作)的文档
 // 当docIds不为nil时仅从docIds指定的文档中查找
 func (indexer *Indexer) Lookup(
-	tokens []string, labels []string, docIds *map[uint64]bool) (docs []IndexedDocument) {
+	tokens []string, labels []string, docIds []uint64 /*docIds *map[uint64]bool*/) (docs []IndexedDocument) {
 	if indexer.initialized == false {
 		log.Fatal("索引器尚未初始化")
 	}
@@ -255,12 +255,22 @@ func (indexer *Indexer) Lookup(
 		// 以第一个搜索键出现的文档作为基准，并遍历其他搜索键搜索同一文档
 		baseDocId := indexer.getDocId(table[0], indexPointers[0])
 
-		if docIds != nil {
-			_, found := (*docIds)[baseDocId]
-			if !found {
+		/*
+			if docIds != nil {
+				_, found := (*docIds)[baseDocId]
+				if !found {
+					continue
+				}
+			}
+		*/
+		//注释上方，只要判断搜索结果是否在给定范围内就ok，无需生成字典
+		//大大提高搜索效率
+		if len(docIds) == 2 && (docIds[0] <= docIds[1]) {
+			if docIds[0] > baseDocId || baseDocId > docIds[1] {
 				continue
 			}
 		}
+
 		iTable := 1
 		found := true
 		for ; iTable < len(table); iTable++ {

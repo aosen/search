@@ -461,8 +461,8 @@ func (engine *Engine) rankerRemoveScoringFieldsWorker(shard int) {
 func (engine *Engine) IndexDocument(docId uint64, data DocumentIndexData) {
 	engine.internalIndexDocument(docId, data)
 
-	hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 	if engine.initOptions.UsePersistentStorage {
+		hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 		engine.persistentStorageIndexDocumentChannels[hash] <- persistentStorageIndexDocumentRequest{docId: docId, data: data}
 	}
 }
@@ -687,20 +687,30 @@ func (engine *Engine) indexerLookupWorker(shard int) {
 		if len(request.docIds) == 0 {
 			docs = engine.indexers[shard].Lookup(request.tokens, request.labels, nil)
 		} else {
-			docIds := make(map[uint64]bool)
 			//通过request.docIds 生成查询字典
-			if len(request.docIds) != 2 {
+			if (len(request.docIds) != 2) || (request.docIds[0] > request.docIds[1]) {
 				continue
 			}
-			for i := request.docIds[0]; i <= request.docIds[1]; i++ {
-				docIds[i] = true
-			}
+			/*
+				docIds := make(map[uint64]bool, request.docIds[1]-request.docIds[0]+1)
+				//这个过程比较浪费时间
+				log.Println("map", shard, time.Now().UnixNano())
+				for i := request.docIds[0]; i <= request.docIds[1]; i++ {
+					docIds[i] = true
+				}
+				log.Println("map", shard, time.Now().UnixNano())
+			*/
 			/*
 				for _, ids := range request.docIds {
 					docIds[ids] = true
 				}
 			*/
-			docs = engine.indexers[shard].Lookup(request.tokens, request.labels, &docIds)
+			//将上方代码注释，此处无需生成字典，继续传递docids的范围
+			//就行，然后只要判断最终搜索出来的结果在不在这个范围内就OK
+			/*
+				docs = engine.indexers[shard].Lookup(request.tokens, request.labels, &docIds)
+			*/
+			docs = engine.indexers[shard].Lookup(request.tokens, request.labels, request.docIds)
 		}
 
 		if len(docs) == 0 {
