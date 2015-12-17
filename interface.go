@@ -2,45 +2,6 @@ package search
 
 import ()
 
-//引擎接口
-type SearchEngine interface {
-	//引擎初始化
-	Init(options EngineInitOptions)
-	//索引文档
-	IndexDocument(docId uint64, data DocumentIndexData)
-	//将文档从索引中删除
-	RemoveDocument(docId uint64)
-	// 阻塞等待直到所有索引添加完毕
-	FlushIndex()
-	// 查找满足搜索条件的文档，此函数线程安全
-	Search(request SearchRequest) (output SearchResponse)
-	//Tokens的数量
-	NumTokenIndexAdded() uint64
-	//文档的数量
-	NumDocumentsIndexed() uint64
-	//关闭引擎
-	Close()
-}
-
-//分词器
-type SearchSegmenter interface {
-	// 返回分词器使用的词典
-	Dictionary() *Dictionary
-	// 从文件中载入词典
-	// 可以载入多个词典文件，文件名用","分隔，排在前面的词典优先载入分词，比如
-	// 	"用户词典.txt,通用词典.txt"
-	// 当一个分词既出现在用户词典也出现在通用词典中，则优先使用用户词典。
-	// 词典的格式为（每个分词一行）：
-	//	分词文本 频率 词性
-	LoadDictionary(files string)
-	// 对文本分词
-	// 输入参数：
-	//	bytes	UTF8文本的字节数组
-	// 输出：
-	//	[]Segment	划分的分词
-	Cut(bytes []byte, model bool) []Segment
-}
-
 //索引器接口
 type SearchIndexer interface {
 	// 初始化索引器
@@ -50,24 +11,6 @@ type SearchIndexer interface {
 	// 查找包含全部搜索键(AND操作)的文档
 	// 当docIds不为nil时仅从docIds指定的文档中查找
 	Lookup() (docs []IndexedDocument)
-}
-
-//存储器
-type SearchPipline interface {
-	//初始化存储器, shard为初始化的集合编号
-	Init()
-	//获取存储集合数量
-	GetStorageShards() int
-	//连接数据库
-	Conn(shard int)
-	//关闭数据库连接
-	Close(shard int)
-	//将数据从shard DB恢复到内存
-	Recover(shard int, internalIndexDocument func(docId uint64, data DocumentIndexData)) error
-	//存储索引
-	Set(shard int, key, value []byte)
-	//从DB删除索引
-	Delete(shard int, key []byte)
 }
 
 //排序起接口

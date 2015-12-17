@@ -9,7 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
-	"github.com/aosen/cut"
+	"github.com/aosen/search/utils"
 	"io"
 	"log"
 	"os"
@@ -17,6 +17,10 @@ import (
 	"sort"
 	"sync/atomic"
 	"time"
+)
+
+const (
+	NumNanosecondsInAMillisecond = 1000000
 )
 
 // 文档的一个关键词
@@ -88,7 +92,7 @@ func (docs ScoredDocuments) Swap(i, j int) {
 }
 func (docs ScoredDocuments) Less(i, j int) bool {
 	// 为了从大到小排序，这实际上实现的是More的功能
-	for iScore := 0; iScore < MinInt(len(docs[i].Scores), len(docs[j].Scores)); iScore++ {
+	for iScore := 0; iScore < utils.MinInt(len(docs[i].Scores), len(docs[j].Scores)); iScore++ {
 		if docs[i].Scores[iScore] > docs[j].Scores[iScore] {
 			return true
 		} else if docs[i].Scores[iScore] < docs[j].Scores[iScore] {
@@ -143,7 +147,7 @@ type persistentStorageIndexDocumentRequest struct {
 type EngineInitOptions struct {
 	// 半角逗号分隔的字典文件，具体用法见
 	// sego.Segmenter.LoadDictionary函数的注释
-	Segmenter cut.Segmenter
+	Segmenter SearchSegmenter
 
 	// 停用词文件
 	StopTokenFile string
@@ -199,10 +203,6 @@ var (
 		K1: 2.0,
 		B:  0.75,
 	}
-	defaultPersistentStorageShards  = 4
-	defaultPersistentStoragePipline = InitKV(
-		defaultPersistentStorageShards,
-	)
 )
 
 // 初始化EngineInitOptions，当用户未设定某个选项的值时用默认值取代
@@ -246,11 +246,6 @@ func (options *EngineInitOptions) Init() {
 	if options.DefaultRankOptions.ScoringCriteria == nil {
 		options.DefaultRankOptions.ScoringCriteria = defaultDefaultRankOptions.ScoringCriteria
 	}
-
-	if options.SearchPipline == nil {
-		//初始化默认的pipline
-		options.SearchPipline = defaultPersistentStoragePipline
-	}
 }
 
 // 搜索引擎基类
@@ -267,7 +262,7 @@ type Engine struct {
 
 	indexers   []Indexer
 	rankers    []Ranker
-	segmenter  cut.Segmenter
+	segmenter  SearchSegmenter
 	stopTokens StopTokens
 	//dbs        []*kv.DB
 	searchpipline SearchPipline
@@ -354,7 +349,7 @@ func (engine *Engine) Init(options EngineInitOptions) {
 	}
 
 	// 初始化持久化存储通道
-	if engine.initOptions.UsePersistentStorage {
+	if engine.initOptions.UsePersistentStorage && engine.initOptions.SearchPipline != nil {
 		storageshards := engine.initOptions.SearchPipline.GetStorageShards()
 		engine.persistentStorageIndexDocumentChannels =
 			make([]chan persistentStorageIndexDocumentRequest,
@@ -462,7 +457,7 @@ func (engine *Engine) IndexDocument(docId uint64, data DocumentIndexData) {
 	engine.internalIndexDocument(docId, data)
 
 	if engine.initOptions.UsePersistentStorage {
-		hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
+		hash := utils.Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 		engine.persistentStorageIndexDocumentChannels[hash] <- persistentStorageIndexDocumentRequest{docId: docId, data: data}
 	}
 }
@@ -473,7 +468,7 @@ func (engine *Engine) internalIndexDocument(docId uint64, data DocumentIndexData
 	}
 
 	atomic.AddUint64(&engine.numIndexingRequests, 1)
-	hash := Murmur3([]byte(fmt.Sprint("%d%s", docId, data.Content)))
+	hash := utils.Murmur3([]byte(fmt.Sprint("%d%s", docId, data.Content)))
 	engine.segmenterChannel <- segmenterRequest{
 		docId: docId, hash: hash, data: data}
 }
@@ -496,7 +491,7 @@ func (engine *Engine) RemoveDocument(docId uint64) {
 
 	if engine.initOptions.UsePersistentStorage {
 		// 从数据库中删除
-		hash := Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
+		hash := utils.Murmur3([]byte(fmt.Sprint("%d", docId))) % uint32(engine.searchpipline.GetStorageShards())
 		go engine.persistentStorageRemoveDocumentWorker(docId, hash)
 	}
 }
@@ -524,9 +519,9 @@ func (engine *Engine) segmenterWorker() {
 			// 当文档正文不为空时，优先从内容分词中得到关键词
 			segments := engine.segmenter.Cut([]byte(request.data.Content), true)
 			for _, segment := range segments {
-				token := segment.Token().Text()
+				token := segment.GetToken().GetText()
 				if !engine.stopTokens.IsStopToken(token) {
-					tokensMap[token] = append(tokensMap[token], segment.Start())
+					tokensMap[token] = append(tokensMap[token], segment.GetStart())
 				}
 			}
 			numTokens = len(segments)
@@ -591,9 +586,9 @@ func (engine *Engine) Search(request SearchRequest) (output SearchResponse) {
 	if request.Text != "" {
 		querySegments := engine.segmenter.Cut([]byte(request.Text), true)
 		for _, s := range querySegments {
-			token := s.Token().Text()
+			token := s.GetToken().GetText()
 			if !engine.stopTokens.IsStopToken(token) {
-				tokens = append(tokens, s.Token().Text())
+				tokens = append(tokens, s.GetToken().GetText())
 			}
 		}
 	} else {
@@ -658,11 +653,11 @@ func (engine *Engine) Search(request SearchRequest) (output SearchResponse) {
 	output.Tokens = tokens
 	var start, end int
 	if rankOptions.MaxOutputs == 0 {
-		start = MinInt(rankOptions.OutputOffset, len(rankOutput))
+		start = utils.MinInt(rankOptions.OutputOffset, len(rankOutput))
 		end = len(rankOutput)
 	} else {
-		start = MinInt(rankOptions.OutputOffset, len(rankOutput))
-		end = MinInt(start+rankOptions.MaxOutputs, len(rankOutput))
+		start = utils.MinInt(rankOptions.OutputOffset, len(rankOutput))
+		end = utils.MinInt(start+rankOptions.MaxOutputs, len(rankOutput))
 	}
 	output.Docs = rankOutput[start:end]
 	output.Timeout = isTimeout

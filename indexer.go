@@ -3,6 +3,7 @@ package search
 //搜索引擎的索引器基类
 
 import (
+	"github.com/aosen/search/utils"
 	"log"
 	"math"
 	"sync"
@@ -443,7 +444,7 @@ func computeTokenProximity(table []*KeywordIndices, indexPointers []int, tokens 
 				if to >= len(nextLocations) {
 					return
 				}
-				value := currentMinValues[from] + AbsInt(nextLocations[to]-currentLocations[from]-len(tokens[i-1]))
+				value := currentMinValues[from] + utils.AbsInt(nextLocations[to]-currentLocations[from]-len(tokens[i-1]))
 				if nextMinValues[to] == -1 || value < nextMinValues[to] {
 					nextMinValues[to] = value
 					path[i][to] = from

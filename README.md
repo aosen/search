@@ -5,6 +5,10 @@ Golang实现的搜索引擎
 
 详细用法见: github.com/aosen/searchserver
 
+##思维脑图
+
+![思维脑图](http://i4.tietuku.com/90be97573a6c3115.png "思维脑图")
+
 #几个重要结构体
 ##搜索引擎初始化结构体
 ```Golang

@@ -3,6 +3,7 @@ package search
 //排序器基类
 
 import (
+	"github.com/aosen/search/utils"
 	"log"
 	"sort"
 	"sync"
@@ -95,10 +96,10 @@ func (ranker *Ranker) Rank(
 	// 当用户要求只返回部分结果时返回部分结果
 	var start, end int
 	if options.MaxOutputs != 0 {
-		start = MinInt(options.OutputOffset, len(outputDocs))
-		end = MinInt(options.OutputOffset+options.MaxOutputs, len(outputDocs))
+		start = utils.MinInt(options.OutputOffset, len(outputDocs))
+		end = utils.MinInt(options.OutputOffset+options.MaxOutputs, len(outputDocs))
 	} else {
-		start = MinInt(options.OutputOffset, len(outputDocs))
+		start = utils.MinInt(options.OutputOffset, len(outputDocs))
 		end = len(outputDocs)
 	}
 	return outputDocs[start:end]
