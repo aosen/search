@@ -114,4 +114,5 @@ type SearchResponse struct {
 ```
 
 #开发进度
+* 2015-12-17 优化搜索效率  ***done***
 * 2015-12-04 增加索引存储方式： mongodb ***done***
