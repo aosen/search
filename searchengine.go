@@ -186,6 +186,9 @@ type EngineInitOptions struct {
 
 	//索引器生成方法
 	CreateIndexer func() SearchIndexer
+
+	//排序器生成方法
+	CreateRanker func() SearchRanker
 }
 
 var (
@@ -275,7 +278,7 @@ type Engine struct {
 	initialized bool
 
 	indexers   []SearchIndexer
-	rankers    []Ranker
+	rankers    []SearchRanker
 	segmenter  SearchSegmenter
 	stopTokens StopTokens
 	//dbs        []*kv.DB
@@ -323,7 +326,7 @@ func (engine *Engine) Init(options EngineInitOptions) {
 		engine.indexers = append(engine.indexers, options.CreateIndexer())
 		engine.indexers[shard].Init(*options.IndexerInitOptions)
 
-		engine.rankers = append(engine.rankers, Ranker{})
+		engine.rankers = append(engine.rankers, options.CreateRanker())
 		engine.rankers[shard].Init()
 	}
 
