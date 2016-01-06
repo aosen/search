@@ -50,6 +50,8 @@ type EngineInitOptions struct {
     //索引持久化
     //pipline接口
     SearchPipline SearchPipline
+	//索引器生成方法
+	CreateIndexer func() SearchIndexer
 }
 ```
 ##建立索引结构体
@@ -119,6 +121,7 @@ type SearchResponse struct {
 ```
 
 #开发进度
+* 2015-01-06 索引器接口话  ***done***
 * 2015-12-17 分词器接口化  ***done***
 * 2015-12-17 优化目录结构  ***done***
 * 2015-12-17 优化搜索效率  ***done***
