@@ -145,6 +145,21 @@ type persistentStorageIndexDocumentRequest struct {
 	data  DocumentIndexData
 }
 
+//排序选项
+type RankOptions struct {
+	// 文档的评分规则，值为nil时使用Engine初始化时设定的规则
+	SearchScorer SearchScorer
+
+	// 默认情况下（ReverseOrder=false）按照分数从大到小排序，否则从小到大排序
+	ReverseOrder bool
+
+	// 从第几条结果开始输出
+	OutputOffset int
+
+	// 最大输出的搜索结果数，为0时无限制
+	MaxOutputs int
+}
+
 type EngineInitOptions struct {
 	// 半角逗号分隔的字典文件，具体用法见
 	// sego.Segmenter.LoadDictionary函数的注释
@@ -175,9 +190,6 @@ type EngineInitOptions struct {
 	// 索引器初始化选项
 	IndexerInitOptions *IndexerInitOptions
 
-	// 默认的搜索选项
-	DefaultRankOptions *RankOptions
-
 	// 是否使用持久数据库，以及数据库文件保存的目录和裂分数目
 	UsePersistentStorage bool
 
@@ -189,6 +201,9 @@ type EngineInitOptions struct {
 
 	//排序器生成方法
 	CreateRanker func() SearchRanker
+
+	//打分器设置
+	SearchScorer SearchScorer
 }
 
 var (
@@ -199,10 +214,7 @@ var (
 	defaultNumIndexerThreadsPerShard = runtime.NumCPU()
 	defaultRankerBufferLength        = runtime.NumCPU()
 	defaultNumRankerThreadsPerShard  = runtime.NumCPU()
-	defaultDefaultRankOptions        = RankOptions{
-		ScoringCriteria: RankByBM25{},
-	}
-	defaultIndexerInitOptions = IndexerInitOptions{
+	defaultIndexerInitOptions        = IndexerInitOptions{
 		IndexType:      FrequenciesIndex,
 		BM25Parameters: &defaultBM25Parameters,
 	}
@@ -244,14 +256,6 @@ func (options *EngineInitOptions) Init() {
 
 	if options.IndexerInitOptions.BM25Parameters == nil {
 		options.IndexerInitOptions.BM25Parameters = &defaultBM25Parameters
-	}
-
-	if options.DefaultRankOptions == nil {
-		options.DefaultRankOptions = &defaultDefaultRankOptions
-	}
-
-	if options.DefaultRankOptions.ScoringCriteria == nil {
-		options.DefaultRankOptions.ScoringCriteria = defaultDefaultRankOptions.ScoringCriteria
 	}
 
 	//如果索引器生成方法为空，则默认使用悟空索引器生成方法
@@ -591,13 +595,16 @@ func (engine *Engine) Search(request SearchRequest) (output SearchResponse) {
 	}
 
 	var rankOptions RankOptions
+	rankOptions.SearchScorer = engine.initOptions.SearchScorer
 	if request.RankOptions == nil {
-		rankOptions = *engine.initOptions.DefaultRankOptions
+		log.Println("必须设置搜索排序选项")
+		return
 	} else {
 		rankOptions = *request.RankOptions
 	}
-	if rankOptions.ScoringCriteria == nil {
-		rankOptions.ScoringCriteria = engine.initOptions.DefaultRankOptions.ScoringCriteria
+	if rankOptions.SearchScorer == nil {
+		log.Println("必须设置打分器")
+		return
 	}
 
 	// 收集关键词

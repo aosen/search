@@ -73,7 +73,7 @@ func (self *WuKongRanker) Rank(
 		fs := self.lock.fields[d.DocId]
 		self.lock.RUnlock()
 		// 计算评分并剔除没有分值的文档
-		scores := options.ScoringCriteria.Score(d, fs)
+		scores := options.SearchScorer.Score(d, fs)
 		if len(scores) > 0 {
 			outputDocs = append(outputDocs, search.ScoredDocument{
 				DocId:                 d.DocId,
