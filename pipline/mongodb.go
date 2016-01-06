@@ -44,10 +44,10 @@ func (self *MongoPipline) Init() {
 	for shard := 0; shard < self.shardnum; shard++ {
 		session, err := mgo.Dial(self.url)
 		if err != nil {
-			panic("open mongodb file:" + err.Error())
+			log.Fatal("open mongodb file:" + err.Error())
 		}
 		if err = session.Ping(); err != nil {
-			panic("MongoDB execute ping error:" + err.Error())
+			log.Fatal("MongoDB execute ping error:" + err.Error())
 		}
 		// Optional. Switch the session to a monotonic behavior.
 		session.SetMode(mgo.Monotonic, true)

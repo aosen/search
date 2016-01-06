@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
-	"github.com/aosen/search/utils"
 	"io"
 	"log"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"sort"
 	"sync/atomic"
 	"time"
+
+	"github.com/aosen/search/utils"
 )
 
 const (
@@ -182,6 +183,9 @@ type EngineInitOptions struct {
 
 	//索引存储接口对接
 	SearchPipline SearchPipline
+
+	//索引器生成方法
+	CreateIndexer func() SearchIndexer
 }
 
 var (
@@ -246,6 +250,16 @@ func (options *EngineInitOptions) Init() {
 	if options.DefaultRankOptions.ScoringCriteria == nil {
 		options.DefaultRankOptions.ScoringCriteria = defaultDefaultRankOptions.ScoringCriteria
 	}
+
+	//如果索引器生成方法为空，则默认使用悟空索引器生成方法
+	//加此处会造成循环引用
+	/*
+		if options.CreateIndexer == nil {
+			options.CreateIndexer = func() *Indexer.WuKongIndexer {
+				return indexer.NewWuKongIndexer()
+			}
+		}
+	*/
 }
 
 // 搜索引擎基类
@@ -260,7 +274,7 @@ type Engine struct {
 	initOptions EngineInitOptions
 	initialized bool
 
-	indexers   []Indexer
+	indexers   []SearchIndexer
 	rankers    []Ranker
 	segmenter  SearchSegmenter
 	stopTokens StopTokens
@@ -304,7 +318,9 @@ func (engine *Engine) Init(options EngineInitOptions) {
 
 	// 初始化索引器和排序器
 	for shard := 0; shard < options.NumShards; shard++ {
-		engine.indexers = append(engine.indexers, Indexer{})
+		//engine.indexers = append(engine.indexers, Indexer{})
+		//利用索引器生成方法生成索引器列表
+		engine.indexers = append(engine.indexers, options.CreateIndexer())
 		engine.indexers[shard].Init(*options.IndexerInitOptions)
 
 		engine.rankers = append(engine.rankers, Ranker{})
