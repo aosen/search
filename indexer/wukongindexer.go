@@ -2,7 +2,7 @@
 Author: Aosen
 QQ: 316052486
 Data: 2015-01-06
-本索引器来自悟空搜索引擎索引器，源码地址：https://github.com/aosen/wukong
+本索引器来自悟空搜索引擎索引器，源码地址：github.com/huichen/wukong
 */
 
 package indexer

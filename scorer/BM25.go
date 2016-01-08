@@ -17,6 +17,10 @@ func NewBM25Scorer() *BM25Scorer {
 	return &BM25Scorer{}
 }
 
-func (self BM25Scorer) Score(doc search.IndexedDocument, fields interface{}) []float32 {
+func (self *BM25Scorer) computeBM25(doc search.IndexedDocument, fields interface{}) {
+
+}
+
+func (self *BM25Scorer) Score(doc search.IndexedDocument, fields interface{}) []float32 {
 	return []float32{doc.BM25}
 }

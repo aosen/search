@@ -1,7 +1,11 @@
-package search
+/*
+Author: Aosen
+Data: 2016-01-07
+QQ: 316052486
+Desc: 搜索引擎主文件, 本搜索引擎雏形来自github.com/huichen/wukong
+*/
 
-//搜索引擎的基类，所有定制化搜索引擎继承此类
-//继承 Engine
+package search
 
 import (
 	"bufio"
@@ -257,16 +261,6 @@ func (options *EngineInitOptions) Init() {
 	if options.IndexerInitOptions.BM25Parameters == nil {
 		options.IndexerInitOptions.BM25Parameters = &defaultBM25Parameters
 	}
-
-	//如果索引器生成方法为空，则默认使用悟空索引器生成方法
-	//加此处会造成循环引用
-	/*
-		if options.CreateIndexer == nil {
-			options.CreateIndexer = func() *Indexer.WuKongIndexer {
-				return indexer.NewWuKongIndexer()
-			}
-		}
-	*/
 }
 
 // 搜索引擎基类
