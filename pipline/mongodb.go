@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"strconv"
+
 	"github.com/aosen/search"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	"log"
-	"strconv"
 )
 
 type MongoPipline struct {
@@ -24,7 +24,7 @@ type MongoPipline struct {
 	collectionPrefix string
 }
 
-type KeyValue struct {
+type mgokeyvalue struct {
 	Id_   bson.ObjectId `bson:"_id"`
 	Key   []byte        `bson:"key"`
 	Value []byte        `bson:"Value"`
@@ -41,16 +41,16 @@ func InitMongo(db string, shardnum int, url string, collectionPrefix string) *Mo
 
 func (self *MongoPipline) Init() {
 	self.sessions = make([]*mgo.Session, self.shardnum)
+	session, err := mgo.Dial(self.url)
+	if err != nil {
+		panic("open mongodb file:" + err.Error())
+	}
+	if err = session.Ping(); err != nil {
+		panic("MongoDB execute ping error:" + err.Error())
+	}
+	// Optional. Switch the session to a monotonic behavior.
+	session.SetMode(mgo.Monotonic, true)
 	for shard := 0; shard < self.shardnum; shard++ {
-		session, err := mgo.Dial(self.url)
-		if err != nil {
-			log.Fatal("open mongodb file:" + err.Error())
-		}
-		if err = session.Ping(); err != nil {
-			log.Fatal("MongoDB execute ping error:" + err.Error())
-		}
-		// Optional. Switch the session to a monotonic behavior.
-		session.SetMode(mgo.Monotonic, true)
 		self.sessions[shard] = session
 	}
 }
@@ -80,12 +80,12 @@ func (self *MongoPipline) Close(shard int) {
 
 func (self *MongoPipline) Recover(shard int, internalIndexDocument func(docId uint64, data search.DocumentIndexData)) error {
 	c := self.sessions[shard].DB(self.mongoDBName).C(self.collectionPrefix + strconv.Itoa(shard))
-	var keyvalues []KeyValue
-	err := c.Find(nil).All(&keyvalues)
+	var mgokeyvalues []mgokeyvalue
+	err := c.Find(nil).All(&mgokeyvalues)
 	if err != nil {
 		return err
 	}
-	for _, kv := range keyvalues {
+	for _, kv := range mgokeyvalues {
 		// 得到docID
 		docId, _ := binary.Uvarint(kv.Key)
 		// 得到data
@@ -105,13 +105,13 @@ func (self *MongoPipline) Recover(shard int, internalIndexDocument func(docId ui
 //将key－value存储到哪个集合中
 func (self *MongoPipline) Set(shard int, key, value []byte) {
 	c := self.sessions[shard].DB(self.mongoDBName).C(self.collectionPrefix + strconv.Itoa(shard))
-	err := c.Insert(&KeyValue{
+	err := c.Insert(&mgokeyvalue{
 		Id_:   bson.NewObjectId(),
 		Key:   key,
 		Value: value,
 	})
 	if err != nil {
-		log.Println("store kv err: " + err.Error())
+		panic("store kv err: " + err.Error())
 	}
 }
 
