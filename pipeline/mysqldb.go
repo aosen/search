@@ -2,23 +2,18 @@
 Author: Aosen
 QQ: 316052486
 Data: 2016-01-14
-Desc: 基于mysql的pipline实现
+Desc: 基于mysql的pipline实现, 本实例仅供参考，还需根据实际开发需求进行改装
 */
-package pipline
+package pipeline
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/aosen/search"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/astaxie/beego/orm"
 )
 
 type MysqlPipline struct {
-	//db列表
-	dbs []*sql.DB
 	//数据库连接信息
 	dbinfo string
 	//索引表的数量
@@ -51,29 +46,20 @@ CREATE TABLE "?" (
 
 //如果没有表就创建表
 func (self *MysqlPipline) Init() {
-	db, _ := sql.Open("mysql", self.dbinfo)
-	db.SetMaxOpenConns(30)
-	db.SetMaxIdleConns(30)
-	err := db.Ping()
-	if err != nil {
-		panic("open mysql err: " + err.Error())
-	}
-	//初始化dbs列表，由于本身mysql db就是连接池属性，
-	//所以只要Open一次就好
-	for shard := 0; shard < self.shardnum; shard++ {
-		self.dbs[shard] = db
-	}
-	//如果mysql中不存在索引表，则创建
-	stmt, err := db.Prepare(CreateTable)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	defer stmt.Close()
-	for shard := 0; shard < self.shardnum; shard++ {
-		if result, err := stmt.Exec(self.tablePrefix + strconv.Itoa(shard)); err == nil {
-			log.Println(result)
-		}
+	orm.RegisterDriver("mysql", orm.DR_MySQL)
+	orm.RegisterDataBase("search", "mysql", self.dbinfo)
+	orm.RegisterModel(new(mysqlkeyvalue))
+	//如果没有索引数据表，则创建
+	o := orm.NewOrm()
+	o.Using("search") // 默认使用 default，你可以指定为其他数据库
+	kv := mysqlkeyvalue{}
+	err := o.Read(&kv)
+	if err == orm.ErrNoRows {
+		log.Println("查询不到")
+	} else if err == orm.ErrMissPK {
+		log.Println("找不到主键")
+	} else {
+		log.Println("00000000000000000")
 	}
 }
 
@@ -87,7 +73,6 @@ func (self *MysqlPipline) Conn(shard int) {
 
 //关闭数据库连接
 func (self *MysqlPipline) Close(shard int) {
-	self.dbs[shard].Close()
 }
 
 //数据恢复

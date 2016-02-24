@@ -1,7 +1,5 @@
 package search
 
-import ()
-
 //存储器
 type SearchPipline interface {
 	//初始化存储器, shard为初始化的集合编号

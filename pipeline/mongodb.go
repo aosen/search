@@ -1,4 +1,4 @@
-package pipline
+package pipeline
 
 //基于mongodb实现的pipline
 

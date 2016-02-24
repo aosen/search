@@ -297,6 +297,10 @@ type Engine struct {
 	persistentStorageInitChannel           chan bool
 }
 
+func NewSearchEngine() *Engine {
+	return &Engine{}
+}
+
 func (engine *Engine) Init(options EngineInitOptions) {
 	// 将线程数设置为CPU数
 	runtime.GOMAXPROCS(runtime.NumCPU())

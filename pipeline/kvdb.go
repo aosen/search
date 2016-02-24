@@ -1,4 +1,4 @@
-package pipline
+package pipeline
 
 //基于"github.com/cznic/kv" 实现的pipline
 
@@ -6,12 +6,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"github.com/aosen/search"
-	"github.com/cznic/kv"
 	"io"
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/aosen/search"
+	"github.com/cznic/kv"
 )
 
 const (
